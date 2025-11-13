@@ -14,3 +14,8 @@ async def ask_agent(request: QueryRequest):
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/")
+async def root():
+    return {"message": "Evolusis AI Agent is running. Use POST /ask to query the agent."}
