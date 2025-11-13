@@ -1,59 +1,46 @@
-# tools.py
 import requests
+import wikipedia
+import openai
 import os
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
+
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-
-def get_current_weather(city: str) -> str:
-    """
-    Fetch current weather from OpenWeatherMap.
-    Returns a human-readable string or an error string.
-    """
-    if not OPENWEATHER_API_KEY:
-        return "Error: Missing OpenWeather API key."
-
-    url = "https://api.openweathermap.org/data/2.5/weather"
-    params = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric"}
-
+def get_weather(city: str) -> str:
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
     try:
-        resp = requests.get(url, params=params, timeout=8)
-        if resp.status_code == 404:
-            return f"City '{city}' not found."
-        resp.raise_for_status()
-        data = resp.json()
-        temp = data["main"]["temp"]
-        desc = data["weather"][0]["description"]
-        country = data["sys"].get("country", "")
-        return f"{temp}°C, {desc} ({country})"
-    except requests.exceptions.RequestException as e:
-        return f"Could not fetch weather data for {city}. Error: {e}"
+        response = requests.get(url)
+        data = response.json()
+        if response.status_code == 200:
+            temp = data['main']['temp']
+            description = data['weather'][0]['description']
+            return f"It's {temp}°C with {description} in {city.capitalize()}."
+        else:
+            return f"Could not fetch weather for {city}. Error: {data.get('message', 'unknown error')}"
+    except Exception as e:
+        return f"Error fetching weather: {e}"
 
-
-def search_wikipedia(topic: str) -> str:
-    """
-    Return a short extract from Wikipedia for the topic.
-    """
+def get_wikipedia_summary(topic: str) -> str:
     try:
-        params = {
-            "action": "query",
-            "format": "json",
-            "titles": topic,
-            "prop": "extracts",
-            "exintro": True,
-            "explaintext": True,
-            "redirects": 1,
-        }
-        resp = requests.get("https://en.wikipedia.org/w/api.php", params=params, timeout=8)
-        resp.raise_for_status()
-        data = resp.json()
-        pages = data.get("query", {}).get("pages", {})
-        if not pages:
-            return "No information found on Wikipedia."
-        page_id = next(iter(pages))
-        extract = pages[page_id].get("extract", "")
-        return extract or "No extract available on Wikipedia."
-    except requests.exceptions.RequestException as e:
-        return f"Could not search Wikipedia for {topic}. Error: {e}"
+        return wikipedia.summary(topic, sentences=2)
+    except wikipedia.exceptions.DisambiguationError as e:
+        return f"Multiple results found for '{topic}'. Try being more specific: {e.options[:3]}"
+    except wikipedia.exceptions.PageError:
+        return f"No page found for '{topic}'."
+    except Exception as e:
+        return f"Error fetching Wikipedia data: {e}"
+
+def call_openai_with_prompt(prompt: str) -> str:
+    openai.api_key = OPENAI_API_KEY
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error calling OpenAI: {e}"

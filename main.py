@@ -1,33 +1,16 @@
-import uvicorn
-import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from agent import process_query_with_tools
-from dotenv import load_dotenv
+from agent import hybrid_agent
 
-load_dotenv()
-logging.basicConfig(level=logging.INFO)
-
-app = FastAPI(
-    title="Evolusis AI Agent Backend",
-    description="AI agent that decides between LLM and external tools (weather/wikipedia).",
-)
-
+app = FastAPI(title="Evolusis AI Agent")
 
 class QueryRequest(BaseModel):
     query: str
 
-
-class AgentResponse(BaseModel):
-    reasoning: str
-    answer: str
-
-
-@app.post("/ask", response_model=AgentResponse)
+@app.post("/ask")
 async def ask_agent(request: QueryRequest):
-    reasoning, answer = process_query_with_tools(request.query)
-    return AgentResponse(reasoning=str(reasoning), answer=str(answer))
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    try:
+        response = hybrid_agent(request.query)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
